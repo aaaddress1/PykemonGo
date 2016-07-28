@@ -12,4 +12,4 @@ Play PokémonGo without hands, Based on Python, and Easy to fix.
 5. `python main.py`
 6. Cheers!
 
-![](Demo.png "Simple Demo")
+![](DemoScr.png "Simple Demo")
