@@ -1,4 +1,5 @@
-#!/usr/bin/python
+# !/usr/bin/python
+# forked from github.com/rubenvereecken/pokemongo-api
 import argparse
 import logging
 import time
@@ -11,12 +12,15 @@ from location import Location
 from pokedex import pokedex
 from inventory import items
 
+from ConfigParser import SafeConfigParser
+
 def setupLogger():
+
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     ch = logging.StreamHandler()
     ch.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('Line %(lineno)d,%(filename)s - %(asctime)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('Line %(lineno)d, %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
@@ -26,7 +30,9 @@ def setupLogger():
 def getProfile(session):
         logging.info("Printing Profile:")
         profile = session.getProfile()
-        logging.info(profile)
+        #logging.info(profile)
+        print("User Name: %s" % profile.player_data.username)
+
 
 
 def setNickname(session):
@@ -37,13 +43,13 @@ def setNickname(session):
 # Grab the nearest pokemon details
 def findBestPokemon(session):
     # Get Map details and print pokemon
-    logging.info("Finding Nearby Pokemon:")
+    logging.info("Finding Nearby Pokemon...")
     cells = session.getMapObjects()
     closest = float("Inf")
     best = -1
     pokemonBest = None
     latitude, longitude, _ = session.getCoordinates()
-    logging.info("Current pos: %f, %f" % (latitude, longitude))
+    #logging.info("Current pos: %f, %f" % (latitude, longitude))
     for cell in cells.map_cells:
         # Heap in pokemon protos where we have long + lat
         pokemons = [p for p in cell.wild_pokemons] + [p for p in cell.catchable_pokemons]
@@ -138,7 +144,8 @@ def encounterAndCatch(session, pokemon, thresholdP=0.5, limit=5, delay=2):
         # CATCH_FLEE is bad news
         if attempt.status == 3:
             logging.info("Possible soft ban.")
-            return attempt
+            #return attempt
+            sys.exit(-1)
 
         # Only try up to x attempts
         count += 1
@@ -150,10 +157,10 @@ def encounterAndCatch(session, pokemon, thresholdP=0.5, limit=5, delay=2):
 # Catch a pokemon at a given point
 def walkAndCatch(session, pokemon):
     if pokemon:
-        logging.info("Catching %s:" % pokedex[pokemon.pokemon_data.pokemon_id])
+        logging.info("Target: %s" % pokedex[pokemon.pokemon_data.pokemon_id])
         session.walkTo(pokemon.latitude, pokemon.longitude, step=3.2)
-        logging.info(encounterAndCatch(session, pokemon))
-
+        catchingData = (encounterAndCatch(session, pokemon))
+        logging.info(catchingData)
 
 # Do Inventory stuff
 def getInventory(session):
@@ -206,7 +213,6 @@ def walkAndSpin(session, fort):
         fortResponse = session.getFortSearch(fort)
         logging.info(fortResponse)
 
-
 # Walk and spin everywhere
 def walkAndSpinMany(session, forts):
     for fort in forts:
@@ -256,6 +262,9 @@ def cleanPokemon(session, thresholdCP=50):
     evolables = [pokedex.PIDGEY, pokedex.RATTATA, pokedex.ZUBAT]
     toEvolve = {evolve: [] for evolve in evolables}
     for pokemon in party:
+        # I love pikachu by knowlet3389
+        if pokedex[pokemon.pokemon_id] == "PIKACHU":
+            continue
         # If low cp, throw away
         if pokemon.cp < thresholdCP:
             # It makes more sense to evolve some,
@@ -314,19 +323,20 @@ def cleanInventory(session):
 # Basic bot
 def simpleBot(session):
     # Trying not to flood the servers
-    cooldown = 1
+    cooldown = 10
 
     # Run the bot
     while True:
         forts = sortCloseForts(session)
-        cleanPokemon(session, thresholdCP=300)
+        cleanPokemon(session, thresholdCP=100)
         cleanInventory(session)
+
         try:
             for fort in forts:
                 pokemon = findBestPokemon(session)
                 walkAndCatch(session, pokemon)
                 walkAndSpin(session, fort)
-                cooldown = 1
+                cooldown = 10
                 time.sleep(1)
 
         # Catch problems and reauthenticate
@@ -343,39 +353,33 @@ def simpleBot(session):
             cooldown *= 2
 
 
+
 # Entry point
 # Start off authentication and demo
 if __name__ == '__main__':
     setupLogger()
     logging.debug('Logger set up')
 
-    # Read in args
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-a", "--auth", help="Auth Service", required=True)
-    parser.add_argument("-u", "--username", help="Username", required=True)
-    parser.add_argument("-p", "--password", help="Password", required=True)
-    parser.add_argument("-l", "--location", help="Location")
-    parser.add_argument("-g", "--geo_key", help="GEO API Secret")
-    args = parser.parse_args()
+    parser = SafeConfigParser()
+    parser.read('data.config')
 
-    # Check service
-    if args.auth not in ['ptc', 'google']:
-        logging.error('Invalid auth service {}'.format(args.auth))
-        sys.exit(-1)
-
+    usrName = parser.get('account', 'usr')
+    pasWord = parser.get('account', 'pas')
+    loginType = parser.get('account', 'type')
+    usrLocation = parser.get('account', 'location')
     # Create PokoAuthObject
     poko_session = PokeAuthSession(
-        args.username,
-        args.password,
-        args.auth,
-        geo_key=args.geo_key
+        usrName,
+        pasWord,
+        loginType
     )
+
 
     # Authenticate with a given location
     # Location is not inherent in authentication
     # But is important to session
-    if args.location:
-        session = poko_session.authenticate(locationLookup=args.location)
+    if usrLocation:
+        session = poko_session.authenticate(locationLookup=usrLocation)
     else:
         session = poko_session.authenticate()
 
@@ -384,20 +388,10 @@ if __name__ == '__main__':
 
         # General
         getProfile(session)
-        getInventory(session)
+        #getInventory(session)
+        if usrLocation:
+            simpleBot(session)
 
-        # Things we need GPS for
-        if args.location:
-            # Pokemon related
-            pokemon = findBestPokemon(session)
-            walkAndCatch(session, pokemon)
-
-            # Pokestop related
-            fort = findClosestFort(session)
-            walkAndSpin(session, fort)
-
-        # see simpleBot() for logical usecases
-        # eg. simpleBot(session)
 
     else:
         logging.critical('Session not created successfully')
