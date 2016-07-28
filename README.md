@@ -5,7 +5,7 @@ This Project is forked from [rubenvereecken/pokemongo-api](github.com/rubenveree
 
 Although there're a lot of Python API for developers in Github, you still feel difficult to find a project to use without thinking when you're looking for a python bot.
 
-So I make a easy python script of PokémonGo bot, you can build your bot easily on macOS, Linux, Ubuntu, etc. (I am not sure how this python works on Windows)
+So I make a easy python script of PokémonGo bot, you can build your bot easily on macOS, Linux, Ubuntu, etc. (I am not sure how Python works on Windows)
 
 ### How To Use
 
